@@ -1,19 +1,21 @@
-from . import models
-from fastapi.middleware.cors import CORSMiddleware
-from .database import Base, engine
+
+import os
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from .database import engine
+from . import models
+from .database import Base, engine
 from .routers.auth import router as auth_router
 from .routers.leaves import router as leaves_router
 from .routers.dashboard import router as dashboard_router
 from .routers.ai import router as ai_router
 from .routers.attendance import router as attendance_router
-from backend.app.routers import ai
-from backend.app.routers import notifications
+from .routers.notifications import router as notifications_router
 
 
+# Create tables from the registered SQLAlchemy models.
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -21,23 +23,35 @@ app = FastAPI(
     description="AI-powered College Leave Management System",
     version="1.0.0",
 )
+
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+frontend_url = os.getenv("FRONTEND_URL", "").strip()
+if frontend_url:
+    allowed_origins.extend(
+        origin.strip()
+        for origin in frontend_url.split(",")
+        if origin.strip()
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(ai_router)
 app.include_router(leaves_router)
 app.include_router(attendance_router)
-app.include_router(ai.router)
-app.include_router(notifications.router)
+app.include_router(notifications_router)
+
 
 @app.get("/")
 def root():
@@ -50,9 +64,7 @@ def root():
 
 @app.get("/health")
 def health_check():
-    return {
-        "status": "healthy"
-    }
+    return {"status": "healthy"}
 
 
 @app.get("/health/database")
@@ -65,10 +77,8 @@ def database_health_check():
             "database": "connected",
             "status": "healthy",
         }
-
-    except Exception as e:
+    except Exception:
         return {
             "database": "disconnected",
             "status": "unhealthy",
-            "error": str(e),
         }
